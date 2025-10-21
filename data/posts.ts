@@ -96,3 +96,27 @@ export async function getAllPosts(params: { page?: number; limit?: number } = {}
   const json = (await res.json()) as GetAllPostsResponse;
   return json;
 }
+
+export async function deletePost(postId: string) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`${API_BASE_URL}/admin/delete-post/${postId}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    let msg = "Failed to delete post";
+    try {
+      const body = await res.json();
+      msg = body?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  return await res.json();
+}

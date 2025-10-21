@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Post } from '@/data/mockData';
-import { getAllPosts, PostItem } from '@/data/posts';
+import { getAllPosts, PostItem, deletePost as deletePostApi } from '@/data/posts';
 import { getToken, removeToken } from '@/config/storage';
 import { validateToken } from '@/data/auth';
 import { Heart, Trash2, Eye } from 'lucide-react';
@@ -109,10 +109,17 @@ export default function PostsPage() {
     ? posts
     : posts.filter(post => post.status === filterStatus);
 
-  const deletePost = (postId: string) => {
-    setPosts(posts.map(post =>
-      post.id === postId ? { ...post, status: 'deleted' as const } : post
-    ));
+  const deletePost = async (postId: string) => {
+    try {
+      await deletePostApi(postId);
+      // Update local state to reflect the deletion
+      setPosts(posts.map(post =>
+        post.id === postId ? { ...post, status: 'deleted' as const } : post
+      ));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete post';
+      setError(errorMessage);
+    }
   };
 
   const getStatusColor = (status: string) => {
