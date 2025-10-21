@@ -3,7 +3,6 @@
 import AdminLayout from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, FileText, AlertCircle, TrendingUp } from 'lucide-react';
-import { mockUsers, mockPosts, mockReports, weeklyUserGrowth } from '@/data/mockData';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -11,9 +10,14 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getToken, removeToken } from '@/config/storage';
 import { validateToken } from '@/data/auth';
+import { useState } from 'react';
+import { getDashboardStats, DashboardStats } from '@/data/dashboard';
 
 export default function Dashboard() {
   const router = useRouter();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -25,16 +29,30 @@ export default function Dashboard() {
       if (!ok) {
         removeToken();
         router.replace('/login');
+      } else {
+        getDashboardStats()
+          .then((data) => setStats(data))
+          .catch((e: unknown) => {
+            const msg = e instanceof Error ? e.message : 'Failed to load stats';
+            setError(msg);
+          })
+          .finally(() => setLoadingStats(false));
       }
     });
   }, [router]);
-  const activeUsers = mockUsers.filter(u => u.status === 'active').length;
-  const totalPosts = mockPosts.length;
-  const pendingReports = mockReports.filter(r => r.status === 'pending').length;
+  const totalUsers = stats?.totalUser ?? 0;
+  const totalPosts = stats?.totalPost ?? 0;
+  const totalReports = stats?.totalReport ?? 0;
+  const totalGroups = stats?.totalGroup ?? 0;
 
   return (
     <AdminLayout title="Dashboard">
       <div className="space-y-6">
+        {error && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 text-destructive px-4 py-3 text-sm">
+            {error}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="rounded-2xl border-border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -42,8 +60,8 @@ export default function Dashboard() {
               <Users className="h-5 w-5 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground">{mockUsers.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">{activeUsers} active</p>
+              <div className="text-3xl font-bold text-foreground">{loadingStats ? '—' : totalUsers}</div>
+              <p className="text-xs text-muted-foreground mt-1">Users total</p>
             </CardContent>
           </Card>
 
@@ -53,8 +71,8 @@ export default function Dashboard() {
               <FileText className="h-5 w-5 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground">{totalPosts}</div>
-              <p className="text-xs text-muted-foreground mt-1">+12% this week</p>
+              <div className="text-3xl font-bold text-foreground">{loadingStats ? '—' : totalPosts}</div>
+              <p className="text-xs text-muted-foreground mt-1">Posts total</p>
             </CardContent>
           </Card>
 
@@ -64,19 +82,19 @@ export default function Dashboard() {
               <AlertCircle className="h-5 w-5 text-destructive" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground">{mockReports.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">{pendingReports} pending</p>
+              <div className="text-3xl font-bold text-foreground">{loadingStats ? '—' : totalReports}</div>
+              <p className="text-xs text-muted-foreground mt-1">Reports total</p>
             </CardContent>
           </Card>
 
           <Card className="rounded-2xl border-border shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Active Users</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Groups</CardTitle>
               <TrendingUp className="h-5 w-5 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground">{activeUsers}</div>
-              <p className="text-xs text-muted-foreground mt-1">Currently online</p>
+              <div className="text-3xl font-bold text-foreground">{loadingStats ? '—' : totalGroups}</div>
+              <p className="text-xs text-muted-foreground mt-1">Groups total</p>
             </CardContent>
           </Card>
         </div>
@@ -87,7 +105,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={weeklyUserGrowth}>
+              <BarChart data={(stats?.days || []).map(d => ({ day: d.weekday, users: d.count }))}>
                 <XAxis dataKey="day" stroke="#888888" fontSize={12} />
                 <YAxis stroke="#888888" fontSize={12} />
                 <Tooltip
