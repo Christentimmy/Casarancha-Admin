@@ -7,8 +7,27 @@ import { mockUsers, mockPosts, mockReports, weeklyUserGrowth } from '@/data/mock
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getToken, removeToken } from '@/config/storage';
+import { validateToken } from '@/data/auth';
 
 export default function Dashboard() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    validateToken(token).then((ok) => {
+      if (!ok) {
+        removeToken();
+        router.replace('/login');
+      }
+    });
+  }, [router]);
   const activeUsers = mockUsers.filter(u => u.status === 'active').length;
   const totalPosts = mockPosts.length;
   const pendingReports = mockReports.filter(r => r.status === 'pending').length;

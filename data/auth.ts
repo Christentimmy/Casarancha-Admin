@@ -27,3 +27,19 @@ export async function loginAdmin(email: string, password: string): Promise<Login
   const data = (await res.json()) as LoginResponse;
   return data;
 }
+
+export async function validateToken(token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/admin/validate-token`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}

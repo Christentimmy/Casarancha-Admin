@@ -6,6 +6,7 @@ import { useState } from "react";
 import { loginAdmin } from "@/data/auth";
 import { setToken } from "@/config/storage";
 import { useRouter } from "next/navigation";
+import { validateToken } from "@/data/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,6 +15,8 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
