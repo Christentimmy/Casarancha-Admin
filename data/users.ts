@@ -41,14 +41,17 @@ export async function getAllUsers(params: GetAllUsersParams = {}) {
   query.set("limit", String(limit));
   if (search) query.set("search", search);
 
-  const res = await fetch(`${API_BASE_URL}/admin/get-all-users?${query.toString()}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `${API_BASE_URL}/admin/get-all-users?${query.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    }
+  );
 
   if (!res.ok) {
     let msg = "Failed to fetch users";
@@ -63,15 +66,25 @@ export async function getAllUsers(params: GetAllUsersParams = {}) {
   return json;
 }
 
-export type SearchUsersParams = { query: string; page?: number; limit?: number };
-export type SearchUsersResponse = { message: string; data: UserSummary[]; pagination?: Pagination };
+export type SearchUsersParams = {
+  query: string;
+  page?: number;
+  limit?: number;
+};
+export type SearchUsersResponse = {
+  message: string;
+  data: UserSummary[];
+  pagination?: Pagination;
+};
 
-export async function searchUsers(queryOrParams: string | SearchUsersParams): Promise<SearchUsersResponse> {
+export async function searchUsers(
+  queryOrParams: string | SearchUsersParams
+): Promise<SearchUsersResponse> {
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
   const qs = new URLSearchParams();
-  if (typeof queryOrParams === 'string') {
+  if (typeof queryOrParams === "string") {
     qs.set("query", queryOrParams);
   } else {
     qs.set("query", queryOrParams.query);
@@ -79,14 +92,17 @@ export async function searchUsers(queryOrParams: string | SearchUsersParams): Pr
     if (queryOrParams.limit) qs.set("limit", String(queryOrParams.limit));
   }
 
-  const res = await fetch(`${API_BASE_URL}/admin/search-users?${qs.toString()}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `${API_BASE_URL}/admin/search-users?${qs.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    }
+  );
 
   if (!res.ok) {
     let msg = "Failed to search users";
@@ -99,4 +115,27 @@ export async function searchUsers(queryOrParams: string | SearchUsersParams): Pr
 
   const json = (await res.json()) as SearchUsersResponse;
   return json;
+}
+
+export async function toggleBan(userId: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const res = await fetch(`${API_BASE_URL}/admin/toggle-ban/${userId}`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    let msg = "Failed to toggle ban";
+    try {
+      const body = await res.json();
+      msg = body?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
 }

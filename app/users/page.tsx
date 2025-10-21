@@ -37,7 +37,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { mockUsers, User } from '@/data/mockData';
-import { getAllUsers, searchUsers } from '@/data/users';
+import { getAllUsers, searchUsers, toggleBan } from '@/data/users';
 import { getToken, removeToken } from '@/config/storage';
 import { useRouter } from 'next/navigation';
 import { validateToken } from '@/data/auth';
@@ -250,10 +250,6 @@ export default function UsersPage() {
                                   <p className="text-sm text-muted-foreground">{selectedUser.status}</p>
                                 </div>
                                 <div>
-                                  <span className="text-sm font-medium">Posts:</span>
-                                  <p className="text-sm text-muted-foreground">{selectedUser.postsCount}</p>
-                                </div>
-                                <div>
                                   <span className="text-sm font-medium">Joined:</span>
                                   <p className="text-sm text-muted-foreground">
                                     {new Date(selectedUser.joinedDate).toLocaleDateString()}
@@ -300,7 +296,34 @@ export default function UsersPage() {
                             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               className="rounded-xl"
-                              onClick={() => toggleUserStatus(user.id)}
+                              onClick={async () => {
+                                const prevUsers = users;
+                                const nextUsers = users.map(u =>
+                                  u.id === user.id
+                                    ? { ...u, status: (u.status === 'active' ? 'banned' : 'active') as 'active' | 'banned' }
+                                    : u
+                                );
+                                setUsers(nextUsers);
+                                if (selectedUser && selectedUser.id === user.id) {
+                                  setSelectedUser({
+                                    ...selectedUser,
+                                    status: (selectedUser.status === 'active' ? 'banned' : 'active') as 'active' | 'banned',
+                                  });
+                                }
+                                try {
+                                  await toggleBan(user.id);
+                                } catch (e) {
+                                  setUsers(prevUsers);
+                                  if (selectedUser && selectedUser.id === user.id) {
+                                    setSelectedUser({
+                                      ...selectedUser,
+                                      status: (selectedUser.status === 'active' ? 'banned' : 'active') as 'active' | 'banned',
+                                    });
+                                  }
+                                  const msg = e instanceof Error ? e.message : 'Failed to update user status';
+                                  setError(msg);
+                                }
+                              }}
                             >
                               Confirm
                             </AlertDialogAction>
