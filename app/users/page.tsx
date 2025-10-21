@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,18 +37,110 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { mockUsers, User } from '@/data/mockData';
+import { getAllUsers, searchUsers } from '@/data/users';
+import { getToken, removeToken } from '@/config/storage';
+import { useRouter } from 'next/navigation';
+import { validateToken } from '@/data/auth';
 import { Search, Ban, CheckCircle } from 'lucide-react';
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchHasNext, setSearchHasNext] = useState(false);
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    validateToken(token).then((ok) => {
+      if (!ok) {
+        removeToken();
+        router.replace('/login');
+        return;
+      }
+      fetchPage(1, true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchPage = (targetPage: number, replace = false) => {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    getAllUsers({ page: targetPage })
+      .then((resp) => {
+        const mapped = resp.data.map((u) => ({
+          id: u.id,
+          name: (u as any).displayName ?? (u as any).name ?? '',
+          username: u.username,
+          email: u.email,
+          status: u.isBanned ? 'banned' : 'active',
+          joinedDate: u.createdAt,
+          avatar: (u as any).avatarUrl ?? null,
+          postsCount: 0,
+        })) as unknown as User[];
+        setUsers((prev) => (replace ? mapped : [...prev, ...mapped]));
+        setHasNext(resp.pagination?.hasNextPage ?? false);
+        setPage(resp.pagination?.page ?? targetPage);
+      })
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : 'Failed to load users';
+        setError(msg);
+      })
+      .finally(() => setLoading(false));
+  };
+
+  // Debounced server-side search (resets to page 1)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearching(false);
+      setSearchResults([]);
+      setSearchPage(1);
+      setSearchHasNext(false);
+      return;
+    }
+    setSearching(true);
+    setError(null);
+    const t = setTimeout(() => {
+      searchUsers({ query: q, page: 1 })
+        .then((resp) => {
+          const list = resp.data;
+          const mapped = list.map((u) => ({
+            id: u.id,
+            name: (u as any).displayName ?? (u as any).name ?? '',
+            username: u.username,
+            email: u.email,
+            status: u.isBanned ? 'banned' : 'active',
+            joinedDate: u.createdAt,
+            avatar: (u as any).avatarUrl ?? null,
+            postsCount: 0,
+          })) as unknown as User[];
+          setSearchResults(mapped);
+          setSearchPage(resp.pagination?.page ?? 1);
+          setSearchHasNext(resp.pagination?.hasNextPage ?? false);
+        })
+        .catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : 'Search failed';
+          setError(msg);
+        })
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const displayUsers = searchQuery.trim() ? searchResults : users;
 
   const toggleUserStatus = (userId: string) => {
     setUsers(users.map(user =>
@@ -61,6 +153,11 @@ export default function UsersPage() {
   return (
     <AdminLayout title="Users Management">
       <div className="space-y-6">
+        {error && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 text-destructive px-4 py-3 text-sm">
+            {error}
+          </div>
+        )}
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
@@ -72,7 +169,7 @@ export default function UsersPage() {
               className="pl-10 rounded-xl"
             />
           </div>
-          <Button className="rounded-xl">Export Users</Button>
+          <Button className="rounded-xl" disabled>Export Users</Button>
         </div>
 
         <Card className="rounded-2xl border-border shadow-sm">
@@ -82,18 +179,17 @@ export default function UsersPage() {
                 <TableHead>User</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Posts</TableHead>
                 <TableHead>Joined</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((user) => (
+              {displayUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar>
-                        <AvatarImage src={user.avatar} />
+                        <AvatarImage src={user.avatar ?? undefined} />
                         <AvatarFallback>{user.name.substring(0, 2)}</AvatarFallback>
                       </Avatar>
                       <div>
@@ -111,8 +207,7 @@ export default function UsersPage() {
                       {user.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{user.postsCount}</TableCell>
-                  <TableCell>{new Date(user.joinedDate).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(user.joinedDate as unknown as string).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Dialog>
@@ -219,6 +314,60 @@ export default function UsersPage() {
             </TableBody>
           </Table>
         </Card>
+
+        <div className="flex justify-center">
+          {searchQuery.trim()
+            ? (
+              searchHasNext ? (
+                <Button
+                  className="rounded-xl"
+                  onClick={async () => {
+                    if (searching) return;
+                    setSearching(true);
+                    try {
+                      const resp = await searchUsers({ query: searchQuery.trim(), page: searchPage + 1 });
+                      const mapped = resp.data.map((u) => ({
+                        id: u.id,
+                        name: (u as any).displayName ?? (u as any).name ?? '',
+                        username: u.username,
+                        email: u.email,
+                        status: u.isBanned ? 'banned' : 'active',
+                        joinedDate: u.createdAt,
+                        avatar: (u as any).avatarUrl ?? null,
+                        postsCount: 0,
+                      })) as unknown as User[];
+                      setSearchResults((prev) => [...prev, ...mapped]);
+                      setSearchPage((prev) => prev + 1);
+                      setSearchHasNext(resp.pagination?.hasNextPage ?? false);
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : 'Search failed';
+                      setError(msg);
+                    } finally {
+                      setSearching(false);
+                    }
+                  }}
+                  disabled={searching}
+                >
+                  {searching ? 'Loading...' : 'Load more'}
+                </Button>
+              ) : (
+                <div className="text-sm text-muted-foreground">{searching ? 'Searching...' : 'No more results'}</div>
+              )
+            )
+            : (
+              hasNext ? (
+                <Button
+                  className="rounded-xl"
+                  onClick={() => fetchPage(page + 1)}
+                  disabled={loading}
+                >
+                  {loading ? 'Loading...' : 'Load more'}
+                </Button>
+              ) : (
+                <div className="text-sm text-muted-foreground">No more users</div>
+              )
+            )}
+        </div>
       </div>
     </AdminLayout>
   );
